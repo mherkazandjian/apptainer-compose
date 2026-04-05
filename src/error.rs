@@ -19,6 +19,7 @@ pub enum AppError {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(dead_code)]
 pub enum ComposeFileError {
     #[error("compose file not found: {path}")]
     NotFound { path: PathBuf },
@@ -46,6 +47,7 @@ pub enum ComposeFileError {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(dead_code)]
 pub enum ApptainerError {
     #[error("apptainer not found on PATH. Install from https://apptainer.org")]
     NotFound,
@@ -67,6 +69,7 @@ pub enum ApptainerError {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[allow(dead_code)]
 pub enum StateError {
     #[error("failed to read state file: {0}")]
     ReadFailed(String),

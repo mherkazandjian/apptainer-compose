@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use indexmap::IndexMap;
@@ -22,16 +21,6 @@ fn image_filename(image: &str) -> String {
         .replace(':', "_")
         .replace('.', "_")
         + ".sif"
-}
-
-/// Resolve the SIF path for a service without pulling.
-/// Returns the path string if image already exists or after pulling.
-pub fn resolve_sif_path(project_dir: &Path, service: &Service) -> Option<(String, String)> {
-    let image = service.image.as_ref()?;
-    let dir = images_dir(project_dir);
-    let filename = image_filename(image);
-    let sif_path = dir.join(&filename);
-    Some((image.clone(), sif_path.to_string_lossy().to_string()))
 }
 
 /// Ensure an image is available (pull if necessary), return path to SIF file

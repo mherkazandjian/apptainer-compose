@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 /// Represents an action to be taken on the infrastructure
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Action {
     PullImage {
         service: String,

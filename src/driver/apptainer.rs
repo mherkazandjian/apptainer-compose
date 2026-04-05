@@ -10,6 +10,7 @@ pub struct Apptainer {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct LiveInstance {
     #[serde(rename = "instance")]
     pub name: String,

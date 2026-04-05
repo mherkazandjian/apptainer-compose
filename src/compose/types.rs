@@ -493,21 +493,6 @@ pub enum Labels {
     List(Vec<String>),
 }
 
-impl Labels {
-    pub fn to_map(&self) -> HashMap<String, String> {
-        match self {
-            Labels::Map(m) => m.clone(),
-            Labels::List(l) => l
-                .iter()
-                .filter_map(|s| {
-                    s.split_once('=')
-                        .map(|(k, v)| (k.to_string(), v.to_string()))
-                })
-                .collect(),
-        }
-    }
-}
-
 // --- Logging ---
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

@@ -4,14 +4,18 @@ use std::path::Path;
 
 use crate::error::{Result, StateError};
 
+#[allow(dead_code)]
 const STATE_DIR: &str = ".apptainer-compose";
+#[allow(dead_code)]
 const LOCK_FILE: &str = "state.lock";
 
 /// A file-based lock for concurrent access protection
+#[allow(dead_code)]
 pub struct StateLock {
     _file: File,
 }
 
+#[allow(dead_code)]
 impl StateLock {
     /// Acquire an exclusive lock on the state directory
     pub fn acquire(project_dir: &Path) -> Result<Self> {
