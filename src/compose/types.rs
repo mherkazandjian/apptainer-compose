@@ -330,6 +330,16 @@ pub struct VolumeConfig {
     pub external: Option<ExternalConfig>,
     pub labels: Option<Labels>,
     pub name: Option<String>,
+    #[serde(rename = "x-apptainer")]
+    pub x_apptainer: Option<VolumeApptainerExtensions>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct VolumeApptainerExtensions {
+    /// Volume backend: "ext3" for ext3 image files, or omit for plain directory (default)
+    pub backend: Option<String>,
+    /// Size of the ext3 image (e.g., "256M", "1G"). Default: 256M
+    pub size: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

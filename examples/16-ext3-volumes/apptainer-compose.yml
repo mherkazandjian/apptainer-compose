@@ -1,0 +1,25 @@
+# Persistent ext3 volume images.
+# Named volumes with x-apptainer backend: ext3 are stored as ext3 image files
+# instead of plain directories, giving real filesystem semantics and size limits.
+# Created via `apptainer overlay create` -- no root required.
+
+services:
+  writer:
+    image: alpine:latest
+    command: sh -c "echo 'written at $(date)' >> /data/log.txt && cat /data/log.txt"
+    volumes:
+      - appdata:/data
+
+  reader:
+    image: alpine:latest
+    command: sh -c "cat /data/log.txt"
+    volumes:
+      - appdata:/data:ro
+    depends_on:
+      - writer
+
+volumes:
+  appdata:
+    x-apptainer:
+      backend: ext3
+      size: 64M

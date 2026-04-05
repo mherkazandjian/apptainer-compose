@@ -378,6 +378,22 @@ test_15_full_stack_app() {
     fi
 }
 
+test_16_ext3_volumes() {
+    local output
+    output=$(cd "$EXAMPLES/16-ext3-volumes" && "$BIN" config 2>&1) || {
+        fail "test_16_ext3_volumes: config command failed"
+        return
+    }
+    local ok=true
+    assert_contains "$output" "appdata" "test_16_ext3_volumes" || ok=false
+    assert_contains "$output" "ext3" "test_16_ext3_volumes" || ok=false
+    assert_contains "$output" "writer" "test_16_ext3_volumes" || ok=false
+    assert_contains "$output" "reader" "test_16_ext3_volumes" || ok=false
+    if $ok; then
+        pass "test_16_ext3_volumes"
+    fi
+}
+
 test_version() {
     local output
     output=$("$BIN" version 2>&1) || {
@@ -470,6 +486,7 @@ run_test test_12_web_database
 run_test test_13_apptainer_extensions
 run_test test_14_dns_and_networking
 run_test test_15_full_stack_app
+run_test test_16_ext3_volumes
 
 echo -e "${BOLD}Running CLI tests...${RESET}"
 echo ""

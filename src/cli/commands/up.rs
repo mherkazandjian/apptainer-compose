@@ -171,7 +171,7 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
         .await?;
 
         // Create volumes
-        volume::ensure_volumes(&project_dir, &compose, service_name)?;
+        volume::ensure_volumes(&project_dir, &compose, service_name, &apptainer.binary)?;
 
         // Generate /etc/hosts for service discovery
         let hosts_file = network::generate_hosts_file(

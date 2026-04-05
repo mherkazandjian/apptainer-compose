@@ -73,7 +73,7 @@ pub async fn run(global: GlobalOpts, args: CreateArgs) -> Result<()> {
         image::ensure_image(&apptainer, &project_dir, service_name, service).await?;
 
         // Create volumes
-        volume::ensure_volumes(&project_dir, &compose, service_name)?;
+        volume::ensure_volumes(&project_dir, &compose, service_name, &apptainer.binary)?;
     }
 
     Ok(())
