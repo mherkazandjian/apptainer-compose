@@ -151,6 +151,18 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
     };
     let ordered = dependency::resolve_order(&compose.services, &target_services)?;
 
+    // Pull all images in parallel with progress display
+    if !global.dry_run {
+        tracing::info!("Pulling images...");
+    }
+    let pulled_images = image::pull_images_parallel(
+        &apptainer,
+        &project_dir,
+        &compose.services,
+        &ordered,
+    )
+    .await?;
+
     // Process each service in dependency order
     for service_name in &ordered {
         let service = &compose.services[service_name];
@@ -161,14 +173,18 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
             continue;
         }
 
-        // Pull/build image
-        let image_path = image::ensure_image(
-            &apptainer,
-            &project_dir,
-            service_name,
-            service,
-        )
-        .await?;
+        // Get pre-pulled image or build
+        let image_path = if let Some(path) = pulled_images.get(service_name) {
+            path.clone()
+        } else {
+            image::ensure_image(
+                &apptainer,
+                &project_dir,
+                service_name,
+                service,
+            )
+            .await?
+        };
 
         // Create volumes
         volume::ensure_volumes(&project_dir, &compose, service_name, &apptainer.binary)?;

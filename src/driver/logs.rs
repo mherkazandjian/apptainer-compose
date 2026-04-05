@@ -46,12 +46,17 @@ pub async fn stream_logs(
     }
 
     if log_files.is_empty() {
-        // Fallback: try to find logs in the default location
+        // Fallback: find logs at the default Apptainer location
+        // Path structure: ~/.apptainer/instances/logs/{hostname}/{username}/{name}.out/.err
+        let home = dirs::home_dir().unwrap_or_default();
+        let hostname = gethostname::gethostname();
+        let hostname = hostname.to_string_lossy();
+        let username = whoami::username();
+        let logs_dir = home.join(format!(".apptainer/instances/logs/{hostname}/{username}"));
+
         for name in instance_names {
-            // Common Apptainer log locations
-            let home = dirs::home_dir().unwrap_or_default();
-            let stdout_log = home.join(format!(".apptainer/instances/logs/{name}/stdout"));
-            let stderr_log = home.join(format!(".apptainer/instances/logs/{name}/stderr"));
+            let stdout_log = logs_dir.join(format!("{name}.out"));
+            let stderr_log = logs_dir.join(format!("{name}.err"));
 
             if stdout_log.exists() {
                 log_files.insert(

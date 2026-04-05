@@ -204,23 +204,47 @@ impl Apptainer {
         Ok(status.code().unwrap_or(1))
     }
 
-    /// Pull an image from a URI to a SIF file
-    pub async fn pull(&self, uri: &str, dest: &str) -> Result<()> {
-        let output = Command::new(&self.binary)
-            .args(["pull", "--force", dest, uri])
-            .output()
-            .await?;
+    /// Pull an image from a URI to a SIF file.
+    /// If a progress callback is provided, stderr lines are forwarded to it
+    /// instead of being silently captured.
+    pub async fn pull_with_progress<F>(&self, uri: &str, dest: &str, on_progress: F) -> Result<()>
+    where
+        F: Fn(&str) + Send + 'static,
+    {
+        use tokio::io::{AsyncBufReadExt, BufReader};
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut child = Command::new(&self.binary)
+            .args(["pull", "--force", dest, uri])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| AppError::Other(format!("failed to spawn pull: {e}")))?;
+
+        let stderr = child.stderr.take().unwrap();
+        let reader = BufReader::new(stderr);
+        let mut lines = reader.lines();
+        let mut last_err = String::new();
+
+        while let Ok(Some(line)) = lines.next_line().await {
+            last_err = line.clone();
+            on_progress(&line);
+        }
+
+        let status = child.wait().await?;
+        if !status.success() {
             return Err(ApptainerError::PullFailed {
                 uri: uri.to_string(),
-                reason: stderr.to_string(),
+                reason: last_err,
             }
             .into());
         }
 
         Ok(())
+    }
+
+    /// Pull an image from a URI to a SIF file (simple, captures output)
+    pub async fn pull(&self, uri: &str, dest: &str) -> Result<()> {
+        self.pull_with_progress(uri, dest, |_| {}).await
     }
 
     /// Build an image from a def file

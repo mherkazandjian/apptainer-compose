@@ -4,6 +4,9 @@ use crate::compose::types::{ComposeFile, Service};
 use crate::driver::volume;
 use crate::error::Result;
 
+const OVERLAYS_DIR: &str = ".apptainer-compose/overlays";
+const DEFAULT_OVERLAY_SIZE_MB: u64 = 512;
+
 /// Arguments needed to start an Apptainer instance
 #[derive(Debug, Clone)]
 pub struct StartArgs {
@@ -26,7 +29,8 @@ pub fn build_start_args(
     let instance_name = format!("{}_{}_1", project_name, service_name);
     let mut args: Vec<String> = Vec::new();
 
-    // --compat by default (unless explicitly disabled via x-apptainer)
+    // OCI/Docker compat flags (equivalent to --compat but without --writable-tmpfs,
+    // since tmpfs has very limited space). Instead we use a persistent ext3 overlay.
     let use_compat = service
         .x_apptainer
         .as_ref()
@@ -34,7 +38,49 @@ pub fn build_start_args(
         .unwrap_or(true);
 
     if use_compat {
-        args.push("--compat".to_string());
+        args.push("--containall".to_string());
+        args.push("--no-init".to_string());
+        args.push("--no-umask".to_string());
+        args.push("--no-eval".to_string());
+
+        // Create a persistent ext3 overlay for the writable layer
+        let overlay_dir = project_dir.join(OVERLAYS_DIR);
+        std::fs::create_dir_all(&overlay_dir)?;
+        let overlay_path = overlay_dir.join(format!("{instance_name}.ext3"));
+
+        if !overlay_path.exists() {
+            let apptainer_binary = which::which("apptainer")
+                .or_else(|_| which::which("singularity"))
+                .map_err(|_| crate::error::AppError::Other(
+                    "apptainer/singularity not found".to_string(),
+                ))?;
+            tracing::info!(
+                "Creating writable overlay for {service_name} ({}MB)",
+                DEFAULT_OVERLAY_SIZE_MB
+            );
+            let output = std::process::Command::new(&apptainer_binary)
+                .args([
+                    "overlay",
+                    "create",
+                    "--size",
+                    &DEFAULT_OVERLAY_SIZE_MB.to_string(),
+                    &overlay_path.to_string_lossy(),
+                ])
+                .output()
+                .map_err(|e| crate::error::AppError::Other(
+                    format!("failed to create overlay: {e}"),
+                ))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(crate::error::AppError::Other(format!(
+                    "failed to create overlay for {service_name}: {stderr}"
+                )));
+            }
+        }
+
+        args.push("--overlay".to_string());
+        args.push(overlay_path.to_string_lossy().to_string());
     }
 
     // Bind mounts for volumes

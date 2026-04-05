@@ -1,4 +1,8 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indexmap::IndexMap;
 
 use crate::compose::types::Service;
 use crate::driver::apptainer::Apptainer;
@@ -20,6 +24,16 @@ fn image_filename(image: &str) -> String {
         + ".sif"
 }
 
+/// Resolve the SIF path for a service without pulling.
+/// Returns the path string if image already exists or after pulling.
+pub fn resolve_sif_path(project_dir: &Path, service: &Service) -> Option<(String, String)> {
+    let image = service.image.as_ref()?;
+    let dir = images_dir(project_dir);
+    let filename = image_filename(image);
+    let sif_path = dir.join(&filename);
+    Some((image.clone(), sif_path.to_string_lossy().to_string()))
+}
+
 /// Ensure an image is available (pull if necessary), return path to SIF file
 pub async fn ensure_image(
     apptainer: &Apptainer,
@@ -39,6 +53,106 @@ pub async fn ensure_image(
     Err(AppError::Other(format!(
         "service '{service_name}' has neither 'image' nor 'build' specified"
     )))
+}
+
+/// Pull all images for the given services in parallel with a fancy progress display.
+/// Returns a map of service_name -> sif_path.
+pub async fn pull_images_parallel(
+    apptainer: &Apptainer,
+    project_dir: &Path,
+    services: &IndexMap<String, Service>,
+    target_services: &[String],
+) -> Result<std::collections::HashMap<String, String>> {
+    let dir = images_dir(project_dir);
+    std::fs::create_dir_all(&dir)?;
+
+    let mut results: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut pull_tasks = Vec::new();
+
+    let mp = MultiProgress::new();
+    let style_pulling = ProgressStyle::with_template(
+        "{prefix:.bold.cyan} {spinner:.green} {wide_msg}"
+    )
+    .unwrap()
+    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏");
+
+    let style_done = ProgressStyle::with_template(
+        "{prefix:.bold.cyan} {wide_msg}"
+    )
+    .unwrap();
+
+    for service_name in target_services {
+        let service = match services.get(service_name) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        let image = match &service.image {
+            Some(img) => img.clone(),
+            None => continue, // build-only services handled separately
+        };
+
+        let filename = image_filename(&image);
+        let sif_path = dir.join(&filename);
+        let sif_str = sif_path.to_string_lossy().to_string();
+
+        // Already pulled — mark done immediately
+        if sif_path.exists() {
+            let pb = mp.add(ProgressBar::new_spinner());
+            pb.set_style(style_done.clone());
+            pb.set_prefix(format!("{service_name:>15}"));
+            pb.finish_with_message(format!("Pulled {image}"));
+            results.insert(service_name.clone(), sif_str);
+            continue;
+        }
+
+        let uri = if image.contains("://") {
+            image.clone()
+        } else {
+            format!("docker://{image}")
+        };
+
+        let pb = mp.add(ProgressBar::new_spinner());
+        pb.set_style(style_pulling.clone());
+        pb.set_prefix(format!("{service_name:>15}"));
+        pb.set_message(format!("Pulling {image}..."));
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+        let apptainer = apptainer.clone();
+        let svc = service_name.clone();
+        let img = image.clone();
+        let done_style = style_done.clone();
+
+        let handle = tokio::spawn(async move {
+            let pb_clone = pb.clone();
+            let result = apptainer
+                .pull_with_progress(&uri, &sif_str, move |line| {
+                    pb_clone.set_message(line.to_string());
+                })
+                .await;
+
+            match &result {
+                Ok(()) => {
+                    pb.set_style(done_style);
+                    pb.finish_with_message(format!("Pulled {img}"));
+                }
+                Err(e) => {
+                    pb.finish_with_message(format!("Error pulling {img}: {e}"));
+                }
+            }
+            result.map(|()| (svc, sif_str))
+        });
+
+        pull_tasks.push(handle);
+    }
+
+    // Wait for all pulls to complete
+    for handle in pull_tasks {
+        let (svc, sif_str) = handle.await.map_err(|e| AppError::Other(e.to_string()))??;
+        results.insert(svc, sif_str);
+    }
+
+    Ok(results)
 }
 
 /// Pull an image and return the path to the SIF file
