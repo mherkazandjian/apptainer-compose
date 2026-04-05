@@ -1,0 +1,136 @@
+# Elastic Stack: Elasticsearch, Kibana, Logstash, Filebeat, Metricbeat, APM Server + Demo App
+#
+# Start:   apptainer-compose up -d
+# Kibana:  http://localhost:5601
+# APM:     http://localhost:8200
+# ES:      http://localhost:9200
+#
+# The demo app generates HTTP traffic, logs, and APM traces so Kibana
+# has real data to visualize out of the box.
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      cluster.name: apptainer-demo
+      bootstrap.memory_lock: "true"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.0
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      SERVER_NAME: kibana
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.17.0
+    environment:
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+      XPACK_MONITORING_ENABLED: "false"
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "9600:9600"
+    volumes:
+      - ./config/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    depends_on:
+      - elasticsearch
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.17.0
+    command: >
+      apm-server -e
+        -E apm-server.host=0.0.0.0:8200
+        -E output.elasticsearch.hosts=["http://elasticsearch:9200"]
+        -E apm-server.kibana.enabled=true
+        -E apm-server.kibana.host=http://kibana:5601
+    ports:
+      - "8200:8200"
+    depends_on:
+      - elasticsearch
+      - kibana
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.17.0
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - ./config/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - app-logs:/var/log/demo-app:ro
+    depends_on:
+      - elasticsearch
+      - logstash
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:8.17.0
+    command: metricbeat -e --strict.perms=false
+    volumes:
+      - ./config/metricbeat/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+    depends_on:
+      - elasticsearch
+      - kibana
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  demo-app:
+    image: python:3.12-alpine
+    command: sh -c "pip install --quiet flask elastic-apm requests && python /app/app.py"
+    environment:
+      ELASTIC_APM_SERVICE_NAME: demo-app
+      ELASTIC_APM_SERVER_URL: http://apm-server:8200
+      ELASTIC_APM_ENVIRONMENT: production
+      FLASK_APP: /app/app.py
+      APP_LOG_DIR: /var/log/demo-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./demo-app:/app:ro
+      - app-logs:/var/log/demo-app
+    depends_on:
+      - elasticsearch
+      - apm-server
+      - logstash
+
+volumes:
+  esdata:
+  app-logs:

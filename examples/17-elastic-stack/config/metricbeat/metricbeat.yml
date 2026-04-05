@@ -1,0 +1,35 @@
+metricbeat.modules:
+  - module: system
+    metricsets:
+      - cpu
+      - load
+      - memory
+      - network
+      - process
+      - process_summary
+      - diskio
+      - filesystem
+      - fsstat
+    enabled: true
+    period: 10s
+    processes: ['.*']
+
+  - module: elasticsearch
+    metricsets:
+      - node
+      - node_stats
+      - cluster_stats
+      - index
+    period: 10s
+    hosts: ["http://elasticsearch:9200"]
+
+setup.kibana:
+  host: "kibana:5601"
+
+setup.dashboards.enabled: true
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+logging.level: info
+logging.to_stderr: true
