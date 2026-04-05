@@ -13,7 +13,7 @@ pub struct DownArgs {
     pub services: Vec<String>,
 
     /// Remove named volumes declared in the "volumes" section of the Compose file
-    #[arg(short = 'v', long)]
+    #[arg(long)]
     pub volumes: bool,
 
     /// Remove images used by services

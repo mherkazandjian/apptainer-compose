@@ -82,7 +82,7 @@ test-integration:
 	@echo "==> Building debug binary for integration tests..."
 	@$(DOCKER_RUN) $(RUST_IMAGE) sh -c "rustup target add $(TARGET) && cargo build --target $(TARGET)"
 	@echo "==> Running integration tests in apptainer container (privileged)..."
-	@$(DOCKER_RUN) --privileged $(APPTAINER_IMAGE) sh -c "/workspace/tests/integration/run_tests.sh"
+	@$(DOCKER_RUN) --privileged --entrypoint /bin/sh $(APPTAINER_IMAGE) -c "/workspace/tests/integration/run_tests.sh"
 
 test: test-unit
 ifeq ($(integration),1)

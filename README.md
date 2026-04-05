@@ -49,7 +49,7 @@ Download the latest release for `x86_64` Linux:
 ```bash
 # Download
 curl -L -o apptainer-compose \
-  https://github.com/YOUR_ORG/apptainer-compose/releases/latest/download/apptainer-compose-x86_64-linux
+  https://github.com/mherkazandjian/apptainer-compose/releases/latest/download/apptainer-compose-x86_64-linux
 
 # Make executable
 chmod +x apptainer-compose
@@ -63,7 +63,7 @@ sudo mv apptainer-compose /usr/local/bin/
 Requires Docker (nothing else needs to be installed):
 
 ```bash
-git clone https://github.com/YOUR_ORG/apptainer-compose.git
+git clone https://github.com/mherkazandjian/apptainer-compose.git
 cd apptainer-compose
 
 # Release build (static musl binary)
@@ -308,6 +308,27 @@ apptainer-compose/
 - **Complex Dockerfiles unsupported** -- Multi-stage builds, `COPY --from`, etc. require a native `.def` file via `x-apptainer.def_file`
 - **`privileged: true`** -- Approximated with `--fakeroot`, not true root
 - **Restart policies with `up -d`** -- No persistent supervisor daemon; restart monitoring runs in foreground mode only
+
+## Related projects
+
+### [singularity-compose](https://github.com/singularityhub/singularity-compose)
+
+A Python-based orchestration tool for Singularity containers by Vanessa Sochat ([JOSS paper](https://joss.theoj.org/papers/10.21105/joss.01578)). It uses its own YAML format (`instances:` instead of `services:`) and is not a docker-compose drop-in replacement. The project has been largely inactive since mid-2024.
+
+apptainer-compose addresses the majority of singularity-compose's open and historical issues by design:
+
+| singularity-compose issue | Status | How apptainer-compose solves it |
+|---|---|---|
+| [#50](https://github.com/singularityhub/singularity-compose/issues/50) Named volumes not supported | Fixed | Managed volume directories at `.apptainer-compose/volumes/` |
+| [#25](https://github.com/singularityhub/singularity-compose/issues/25) No environment variable support | Fixed | Full `environment:`, `env_file:`, and `${VAR:-default}` interpolation |
+| [#65](https://github.com/singularityhub/singularity-compose/issues/65) No healthcheck support | Fixed | `healthcheck:` with `condition: service_healthy` dependency gating |
+| [#60](https://github.com/singularityhub/singularity-compose/issues/60), [#73](https://github.com/singularityhub/singularity-compose/issues/73) Broken CNI networking, unwanted auto-config | Fixed | Host networking with `/etc/hosts` injection -- no CNI, no sudo, no surprises |
+| [#24](https://github.com/singularityhub/singularity-compose/issues/24), [#38](https://github.com/singularityhub/singularity-compose/issues/38), [#39](https://github.com/singularityhub/singularity-compose/issues/39) Requires root/sudo | Fixed | Fully rootless via `--compat`; no sudo for networking or ports |
+| [#68](https://github.com/singularityhub/singularity-compose/issues/68), [#63](https://github.com/singularityhub/singularity-compose/issues/63), [#22](https://github.com/singularityhub/singularity-compose/issues/22) Python version/dependency issues | Fixed | Single static Rust binary -- no runtime dependencies |
+| [#58](https://github.com/singularityhub/singularity-compose/issues/58), [#43](https://github.com/singularityhub/singularity-compose/issues/43) No persistent/background containers | Fixed | `apptainer instance run` launches background instances with runscript |
+| [#35](https://github.com/singularityhub/singularity-compose/issues/35) Should follow compose standard | Fixed | Reads standard `docker-compose.yml` / Compose Spec format |
+| [#13](https://github.com/singularityhub/singularity-compose/issues/13) No --fakeroot option | Fixed | `privileged: true` or `x-apptainer.fakeroot: true` |
+| [#26](https://github.com/singularityhub/singularity-compose/issues/26) Unreachable hosts between services | Fixed | `/etc/hosts` maps all services to `127.0.0.1` on shared host network |
 
 ## License
 
