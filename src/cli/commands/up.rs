@@ -101,6 +101,10 @@ pub struct UpArgs {
     #[arg(long)]
     pub no_attach: Vec<String>,
 
+    /// Skip pre-flight checks (e.g. host port availability)
+    #[arg(long)]
+    pub skip_pre_flight: bool,
+
     /// Suppress the build output
     #[arg(long)]
     pub quiet_build: bool,
@@ -153,6 +157,11 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
         args.services.clone()
     };
     let ordered = dependency::resolve_order(&compose.services, &target_services)?;
+
+    // Pre-flight: check that all host ports are available
+    if !args.skip_pre_flight {
+        preflight_check_ports(&compose.services, &ordered)?;
+    }
 
     // Pull all images in parallel with progress display
     if !global.dry_run {
@@ -238,7 +247,8 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
             // Wait for the service's first port to be listening before
             // proceeding to dependent services.
             if let Some(ref ports) = service.ports {
-                if let Some(port) = extract_first_host_port(ports) {
+                let host_ports = extract_host_ports(ports);
+                if let Some(&port) = host_ports.first() {
                     tracing::info!(
                         "Waiting for {service_name} to be ready on port {port}..."
                     );
@@ -262,27 +272,69 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
     Ok(())
 }
 
-/// Extract the first host port from a service's port mappings.
-fn extract_first_host_port(ports: &[PortMapping]) -> Option<u16> {
+/// Extract all host ports from a service's port mappings.
+fn extract_host_ports(ports: &[PortMapping]) -> Vec<u16> {
+    let mut result = Vec::new();
     for port in ports {
         match port {
             PortMapping::Short(s) => {
-                // Strip protocol suffix (e.g. "/tcp", "/udp")
-                let without_proto = s.split('/').next()?;
+                let without_proto = s.split('/').next().unwrap_or("");
                 let parts: Vec<&str> = without_proto.split(':').collect();
-                return match parts.len() {
+                let parsed = match parts.len() {
                     1 => parts[0].parse().ok(),           // "9200"
                     2 => parts[0].parse().ok(),           // "9200:9200"
                     3 => parts[1].parse().ok(),           // "127.0.0.1:9200:9200"
                     _ => None,
                 };
+                if let Some(p) = parsed {
+                    result.push(p);
+                }
             }
             PortMapping::Long(details) => {
-                return Some(details.published.unwrap_or(details.target));
+                result.push(details.published.unwrap_or(details.target));
             }
         }
     }
-    None
+    result
+}
+
+/// Pre-flight check: verify that all host-side ports required by the
+/// target services are free before starting anything.
+fn preflight_check_ports(
+    services: &indexmap::IndexMap<String, crate::compose::types::Service>,
+    ordered: &[String],
+) -> Result<()> {
+    let mut conflicts: Vec<(String, u16)> = Vec::new();
+
+    for service_name in ordered {
+        if let Some(service) = services.get(service_name) {
+            if let Some(ref ports) = service.ports {
+                for port in extract_host_ports(ports) {
+                    if std::net::TcpStream::connect_timeout(
+                        &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
+                        std::time::Duration::from_millis(200),
+                    ).is_ok() {
+                        conflicts.push((service_name.clone(), port));
+                    }
+                }
+            }
+        }
+    }
+
+    if !conflicts.is_empty() {
+        let details: Vec<String> = conflicts
+            .iter()
+            .map(|(svc, port)| format!("  - port {port} (service '{svc}')"))
+            .collect();
+        return Err(crate::error::AppError::Other(format!(
+            "pre-flight check failed: the following host ports are already in use:\n{}\n\
+             Use --skip-pre-flight to bypass this check.",
+            details.join("\n")
+        )));
+    }
+
+    tracing::info!("Pre-flight check passed: all host ports are available");
+    Ok(())
 }
 
 /// Wait for a TCP port to accept connections, with a timeout.
