@@ -1,0 +1,38 @@
+# Services can be assigned to profiles.
+# Only services in active profiles (or with no profile) are started.
+#
+# Start all:         apptainer-compose --profile debug --profile monitoring up
+# Start only debug:  apptainer-compose --profile debug up
+# Start default:     apptainer-compose up  (only services with no profile)
+
+services:
+  app:
+    image: python:3.12-alpine
+    command: python -m http.server 8000
+    ports:
+      - "8000:8000"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: secret
+
+  debug-shell:
+    image: alpine:latest
+    command: sleep infinity
+    profiles:
+      - debug
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    profiles:
+      - monitoring

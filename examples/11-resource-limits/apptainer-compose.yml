@@ -1,0 +1,36 @@
+# Resource limits are translated to Apptainer cgroup flags:
+#   cpus    -> --cpus
+#   memory  -> --memory
+#   pids    -> --pids-limit
+
+services:
+  cpu-bound:
+    image: alpine:latest
+    command: sh -c "while true; do :; done"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+          pids: 100
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  memory-bound:
+    image: alpine:latest
+    command: sh -c "head -c 64M /dev/urandom > /dev/null; sleep infinity"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  lightweight:
+    image: alpine:latest
+    command: sleep infinity
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M

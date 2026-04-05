@@ -1,0 +1,69 @@
+# Apptainer-specific features via x-apptainer extensions.
+# These are ignored by docker-compose but used by apptainer-compose.
+
+services:
+  # Standard Docker-compatible service (--compat enabled by default)
+  standard:
+    image: alpine:latest
+    command: echo "Running with --compat (default)"
+
+  # Disable --compat for native Apptainer behavior
+  # (shared host filesystem, environment leaks in)
+  native:
+    image: alpine:latest
+    command: sh -c "ls /home && echo HOME=$$HOME"
+    x-apptainer:
+      compat: false
+
+  # Service with fakeroot for package installation
+  installer:
+    image: ubuntu:22.04
+    command: sh -c "apt-get update && apt-get install -y curl && curl --version"
+    x-apptainer:
+      fakeroot: true
+
+  # GPU-enabled service with extra bind mounts
+  ml-training:
+    image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+    command: python train.py
+    x-apptainer:
+      nv: true
+      bind_extra:
+        - /scratch/datasets:/data:ro
+        - /scratch/models:/models
+      writable_tmpfs: true
+
+  # AMD GPU service
+  rocm-compute:
+    image: rocm/pytorch:latest
+    command: python -c "import torch; print(torch.cuda.is_available())"
+    x-apptainer:
+      rocm: true
+
+  # Service with overlay filesystem
+  dev-sandbox:
+    image: ubuntu:22.04
+    command: bash
+    x-apptainer:
+      compat: false
+      sandbox: true
+      overlay:
+        - /tmp/my-overlay.img
+
+  # Service with security options
+  secured:
+    image: alpine:latest
+    command: sleep infinity
+    x-apptainer:
+      security:
+        - seccomp:default.json
+      containall: true
+      cleanenv: true
+
+  # Build from Apptainer def file instead of Dockerfile
+  custom-build:
+    image: my-custom-image
+    build:
+      context: .
+    x-apptainer:
+      def_file: ./my-image.def

@@ -1,0 +1,20 @@
+services:
+  app:
+    image: alpine:latest
+    command: sh -c "echo DB_HOST=$$DB_HOST DB_PORT=$$DB_PORT APP_ENV=$$APP_ENV"
+    environment:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      APP_ENV: production
+
+  app-from-file:
+    image: alpine:latest
+    command: sh -c "env | sort"
+    env_file:
+      - .env
+
+  app-with-defaults:
+    image: alpine:latest
+    command: sh -c "echo GREETING=$$GREETING"
+    environment:
+      GREETING: ${GREETING:-Hello World}

@@ -1,0 +1,62 @@
+# Realistic web application with database, cache, and background worker.
+# With Apptainer's host networking, services communicate via localhost.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: myapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
+  api:
+    image: python:3.12-alpine
+    command: python -m http.server 8000
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://app:secret@db:5432/myapp
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    image: python:3.12-alpine
+    command: sh -c "echo 'Worker processing jobs...'; sleep infinity"
+    environment:
+      DATABASE_URL: postgresql://app:secret@db:5432/myapp
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redis-data:

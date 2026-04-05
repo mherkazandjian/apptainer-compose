@@ -1,0 +1,16 @@
+# Base compose file.
+# Run with: apptainer-compose -f apptainer-compose.yml -f apptainer-compose.override.yml up
+
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    environment:
+      ENV: production
+
+  api:
+    image: python:3.12-alpine
+    command: python -m http.server 5000
+    ports:
+      - "5000:5000"

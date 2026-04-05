@@ -1,0 +1,21 @@
+services:
+  writer:
+    image: alpine:latest
+    command: sh -c "echo 'written at $(date)' >> /data/log.txt && cat /data/log.txt"
+    volumes:
+      - shared-data:/data
+
+  reader:
+    image: alpine:latest
+    command: sh -c "cat /data/log.txt"
+    volumes:
+      - shared-data:/data:ro
+
+  bind-mount-demo:
+    image: alpine:latest
+    command: ls -la /host-files
+    volumes:
+      - ./local-files:/host-files
+
+volumes:
+  shared-data:

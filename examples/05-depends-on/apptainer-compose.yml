@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: myapp
+    ports:
+      - "5432:5432"
+
+  migrate:
+    image: alpine:latest
+    command: echo "Running migrations against db..."
+    depends_on:
+      - db
+
+  api:
+    image: python:3.12-alpine
+    command: python -m http.server 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - migrate
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    depends_on:
+      - api

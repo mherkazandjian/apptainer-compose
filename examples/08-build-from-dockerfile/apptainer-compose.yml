@@ -1,0 +1,18 @@
+# Demonstrates building from a Dockerfile.
+# apptainer-compose converts simple Dockerfiles to Apptainer def files.
+# Complex multi-stage builds may require an x-apptainer.def_file instead.
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+
+  # Alternative: build with explicit Dockerfile path
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: echo "Worker started"

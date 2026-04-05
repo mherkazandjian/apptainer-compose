@@ -1,0 +1,24 @@
+# GPU-enabled service using NVIDIA runtime.
+# Apptainer translates this to --nv flag.
+# Requires NVIDIA drivers and nvidia-container-cli on the host.
+
+services:
+  gpu-test:
+    image: nvidia/cuda:12.3.1-base-ubuntu22.04
+    command: nvidia-smi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Alternative: use x-apptainer extension directly
+  gpu-training:
+    image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+    command: 'python -c "import torch; print(torch.cuda.is_available())"'
+    x-apptainer:
+      nv: true
+      bind_extra:
+        - /scratch:/scratch

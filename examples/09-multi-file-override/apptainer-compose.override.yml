@@ -1,0 +1,16 @@
+# Override file for development.
+# Values here override the base docker-compose.yml.
+
+services:
+  web:
+    ports:
+      - "8080:80"
+    environment:
+      ENV: development
+      DEBUG: "true"
+
+  api:
+    ports:
+      - "5001:5000"
+    environment:
+      LOG_LEVEL: debug

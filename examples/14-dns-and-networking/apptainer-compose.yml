@@ -1,0 +1,46 @@
+# Networking in apptainer-compose:
+#
+# By default, all services share the host network (Apptainer default).
+# Service names are resolved via an injected /etc/hosts file.
+# This means services can reach each other at localhost:<port>
+# and also by service name (e.g., curl http://api:5000).
+
+services:
+  api:
+    image: python:3.12-alpine
+    command: python -m http.server 5000
+    hostname: api-server
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "5000:5000"
+    extra_hosts:
+      - "external-service:10.0.0.50"
+    networks:
+      backend:
+        aliases:
+          - api-internal
+
+  web:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    hostname: web-frontend
+    depends_on:
+      - api
+    networks:
+      - backend
+      - frontend
+
+  monitor:
+    image: alpine:latest
+    command: sh -c "while true; do wget -q -O- http://api:5000 || true; sleep 30; done"
+    depends_on:
+      - api
+    networks:
+      - backend
+
+networks:
+  backend:
+  frontend:

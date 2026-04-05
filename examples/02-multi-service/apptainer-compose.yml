@@ -1,0 +1,15 @@
+services:
+  api:
+    image: python:3.12-alpine
+    command: python -m http.server 5000
+    ports:
+      - "5000:5000"
+
+  worker:
+    image: alpine:latest
+    command: sh -c "while true; do echo 'worker tick'; sleep 10; done"
+
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
