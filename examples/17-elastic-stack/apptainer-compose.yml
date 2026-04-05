@@ -12,22 +12,18 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
     environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      xpack.security.http.ssl.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
-      cluster.name: apptainer-demo
-      bootstrap.memory_lock: "true"
     ports:
       - "9200:9200"
       - "9300:9300"
     volumes:
+      - ./config/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
       - esdata:/usr/share/elasticsearch/data
     deploy:
       resources:
         limits:
           cpus: "2.0"
-          memory: 1G
+          memory: 2G
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.17.0
@@ -66,12 +62,21 @@ services:
 
   apm-server:
     image: docker.elastic.co/apm/apm-server:8.17.0
-    command: >
-      apm-server -e
-        -E apm-server.host=0.0.0.0:8200
-        -E output.elasticsearch.hosts=["http://elasticsearch:9200"]
-        -E apm-server.kibana.enabled=true
-        -E apm-server.kibana.host=http://kibana:5601
+    command:
+      - bash
+      - -c
+      - |
+        cd /usr/share/apm-server
+        echo "Waiting for Elasticsearch..."
+        until echo > /dev/tcp/elasticsearch/9200 2>/dev/null; do sleep 3; done
+        echo "Waiting for Kibana..."
+        until echo > /dev/tcp/kibana/5601 2>/dev/null; do sleep 3; done
+        echo "Starting APM Server..."
+        exec apm-server -e \
+          -E apm-server.host=0.0.0.0:8200 \
+          -E 'output.elasticsearch.hosts=["http://elasticsearch:9200"]' \
+          -E apm-server.kibana.enabled=true \
+          -E apm-server.kibana.host=http://kibana:5601
     ports:
       - "8200:8200"
     depends_on:
@@ -85,7 +90,17 @@ services:
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.17.0
-    command: filebeat -e --strict.perms=false
+    command:
+      - sh
+      - -c
+      - |
+        cd /usr/share/filebeat
+        echo "Waiting for Elasticsearch..."
+        until curl -sf http://elasticsearch:9200/_cluster/health >/dev/null 2>&1; do sleep 3; done
+        echo "Waiting for Logstash..."
+        until bash -c 'echo > /dev/tcp/logstash/5044' 2>/dev/null; do sleep 3; done
+        echo "Starting Filebeat..."
+        exec filebeat -e --strict.perms=false
     volumes:
       - ./config/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - app-logs:/var/log/demo-app:ro
@@ -100,7 +115,17 @@ services:
 
   metricbeat:
     image: docker.elastic.co/beats/metricbeat:8.17.0
-    command: metricbeat -e --strict.perms=false
+    command:
+      - sh
+      - -c
+      - |
+        cd /usr/share/metricbeat
+        echo "Waiting for Elasticsearch..."
+        until curl -sf http://elasticsearch:9200/_cluster/health >/dev/null 2>&1; do sleep 3; done
+        echo "Waiting for Kibana..."
+        until curl -sf http://kibana:5601/api/status >/dev/null 2>&1; do sleep 3; done
+        echo "Starting Metricbeat..."
+        exec metricbeat -e --strict.perms=false
     volumes:
       - ./config/metricbeat/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
     depends_on:
@@ -114,7 +139,14 @@ services:
 
   demo-app:
     image: python:3.12-alpine
-    command: sh -c "pip install --quiet flask elastic-apm requests && python /app/app.py"
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for APM Server..."
+        until wget -q --spider http://apm-server:8200 2>/dev/null; do sleep 3; done
+        echo "Installing packages..."
+        pip install --quiet flask elastic-apm requests && python /app/app.py
     environment:
       ELASTIC_APM_SERVICE_NAME: demo-app
       ELASTIC_APM_SERVER_URL: http://apm-server:8200

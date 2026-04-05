@@ -200,10 +200,14 @@ pub fn build_start_args(
         args.push("--nv".to_string());
     }
 
-    // Working directory
-    if let Some(ref workdir) = service.working_dir {
-        args.push("--cwd".to_string());
-        args.push(workdir.clone());
+    // Working directory — `--cwd` is only supported by `exec`/`run`, NOT
+    // by `instance run`.  When a working_dir is specified we warn the user
+    // and skip the flag; services should `cd` in their command instead.
+    if service.working_dir.is_some() {
+        tracing::warn!(
+            "Service '{service_name}': working_dir is not supported by \
+             'instance run' — add 'cd <dir> &&' to the service command instead"
+        );
     }
 
     // Extra hosts

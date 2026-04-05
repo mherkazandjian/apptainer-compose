@@ -1,7 +1,10 @@
+use std::time::{Duration, Instant};
+
 use clap::Args;
 
 use crate::cli::GlobalOpts;
 use crate::compose::parser::load_compose;
+use crate::compose::types::PortMapping;
 use crate::driver::apptainer::Apptainer;
 use crate::driver::image;
 use crate::driver::instance;
@@ -231,6 +234,17 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
                 &image_path,
                 service.image.as_deref().unwrap_or(""),
             );
+
+            // Wait for the service's first port to be listening before
+            // proceeding to dependent services.
+            if let Some(ref ports) = service.ports {
+                if let Some(port) = extract_first_host_port(ports) {
+                    tracing::info!(
+                        "Waiting for {service_name} to be ready on port {port}..."
+                    );
+                    wait_for_port(port, Duration::from_secs(120)).await;
+                }
+            }
         }
     }
 
@@ -246,4 +260,53 @@ pub async fn run(global: GlobalOpts, args: UpArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Extract the first host port from a service's port mappings.
+fn extract_first_host_port(ports: &[PortMapping]) -> Option<u16> {
+    for port in ports {
+        match port {
+            PortMapping::Short(s) => {
+                // Strip protocol suffix (e.g. "/tcp", "/udp")
+                let without_proto = s.split('/').next()?;
+                let parts: Vec<&str> = without_proto.split(':').collect();
+                return match parts.len() {
+                    1 => parts[0].parse().ok(),           // "9200"
+                    2 => parts[0].parse().ok(),           // "9200:9200"
+                    3 => parts[1].parse().ok(),           // "127.0.0.1:9200:9200"
+                    _ => None,
+                };
+            }
+            PortMapping::Long(details) => {
+                return Some(details.published.unwrap_or(details.target));
+            }
+        }
+    }
+    None
+}
+
+/// Wait for a TCP port to accept connections, with a timeout.
+/// Logs progress and returns without error even on timeout (services
+/// may still become ready later via their own retry logic).
+async fn wait_for_port(port: u16, timeout: Duration) {
+    let start = Instant::now();
+    let addr = format!("127.0.0.1:{port}");
+    loop {
+        match tokio::net::TcpStream::connect(&addr).await {
+            Ok(_) => {
+                tracing::info!("Port {port} is ready ({:.1}s)", start.elapsed().as_secs_f64());
+                return;
+            }
+            Err(_) => {
+                if start.elapsed() >= timeout {
+                    tracing::warn!(
+                        "Timed out after {:.0}s waiting for port {port} — continuing anyway",
+                        timeout.as_secs_f64()
+                    );
+                    return;
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+    }
 }
