@@ -30,14 +30,6 @@ gethostname = "0.5"
 whoami = "1"
 indicatif = "0.17"
 
-[[bin]]
-name = "apptainer-compose"
-path = "src/main.rs"
-
-[[bin]]
-name = "apptainer"
-path = "src/main.rs"
-
 [profile.release]
 opt-level = "z"
 lto = true
