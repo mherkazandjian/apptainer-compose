@@ -37,6 +37,8 @@ RUST_RUN := $(DOCKER_RUN) $(RUST_IMAGE) sh -c "rustup target add $(TARGET) && $(
 # Binary paths
 DEBUG_BIN   := target/$(TARGET)/debug/apptainer-compose
 RELEASE_BIN := target/$(TARGET)/release/apptainer-compose
+DEBUG_BIN_ALT   := target/$(TARGET)/debug/apptainer
+RELEASE_BIN_ALT := target/$(TARGET)/release/apptainer
 
 # Check if integration tests are requested
 integration ?= 0
